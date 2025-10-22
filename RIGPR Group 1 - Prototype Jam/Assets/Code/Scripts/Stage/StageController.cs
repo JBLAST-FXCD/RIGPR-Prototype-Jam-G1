@@ -12,6 +12,9 @@ public class StageController : MonoBehaviour
     public int maxNPCCapacity = 1;
     //
 
+    [SerializeField] private float queueSpacing = 1.5f;
+    [SerializeField] private Transform queueOrigin;
+
     private Queue<NPCController> npcQueue = new Queue<NPCController>();
     private List<NPCController> processing = new List<NPCController>();
 
@@ -27,6 +30,8 @@ public class StageController : MonoBehaviour
             npc.StartProcessing(this);
             processing.Add(npc);
         }
+
+        UpdateQueuePositions();
 
         // remove npc when stage complete
         for (int i = processing.Count - 1; i >= 0; i--)
@@ -53,6 +58,7 @@ public class StageController : MonoBehaviour
     {
         npcQueue.Enqueue(npc);
         npc.SetState(NPCState.InQueue);
+        UpdateQueuePositions();
     }
 
     // flag npc as stage completed
@@ -62,4 +68,14 @@ public class StageController : MonoBehaviour
         npc.StageComplete = true;
     }
 
+    private void UpdateQueuePositions()
+    {
+        int index = 0;
+        foreach (var npc in npcQueue)
+        {
+            Vector3 targetPosition = queueOrigin.position - transform.forward * queueSpacing * index;
+            npc.MoveToQueuePoition(targetPosition);
+            index++;
+        }
+    }
 }
