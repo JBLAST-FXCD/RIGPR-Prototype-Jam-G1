@@ -1,79 +1,68 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class BuildingManager : MonoBehaviour
 {
     [Header("Core References")]
-    public Camera mainCamera;                     // Main camera reference
-    public GridManager grid;                      // Grid snapping system
-    public FreeCamera freeCam;                    // Reference to free camera controls
-    public LayerMask buildSurfaceMask;            // Layer(s) that count as valid build surfaces
-    
-    // Determines which prefabs can use stacking, dragging, etc.
+    public Camera mainCamera;
+    public GridManager grid;
+    public FreeCamera freeCam;
+    public LayerMask buildSurfaceMask;
+
     public enum BuildCategory { Default, Wall, Shopfront, Decor, Runway }
 
     [System.Serializable]
     public class BuildPrefab
     {
-        public GameObject prefab;                 // Prefab to spawn
-        public BuildCategory category;            // Type of build (affects behaviour)
+        public GameObject prefab;
+        public BuildCategory category;
     }
 
+    // Track mouse-drag rotation while holding R
+    private bool rotating = false;
+    private float currentRotationY = 0f;
+    private Vector3 lastMousePos;
+    private Vector3 lockedPreviewPos;
+
     [Header("Prefabs & State")]
-    public BuildPrefab[] buildPrefabs;            // All placeable prefabs (set in Inspector)
-    private int selectedIndex = 0;                // Currently selected prefab index
-    private GameObject previewObject;             // Ghost preview of what will be placed
-    private Quaternion rotation = Quaternion.identity; // Current placement rotation
-    private List<GameObject> placedObjects = new List<GameObject>(); // Track placed objects
+    public BuildPrefab[] buildPrefabs;
+    private int selectedIndex = 0;
+    private GameObject previewObject;
+    private Quaternion rotation = Quaternion.identity;
+    private List<GameObject> placedObjects = new List<GameObject>();
 
     [Header("Height / Layering")]
-    public float baseHeightStep = 3f;             // Default fallback for unknown prefab height
-    private float currentHeight = 0f;             // Current placement height (Y offset)
-    private float wallHeightStep = 20f;           // Step height per layer for walls
-    private int currentLayer = 0;                 // Current vertical layer index
+    public float wallHeightStep = 20f;
+    private float currentHeight = 0f;
+    private int currentLayer = 0;
+
+    [Header("Floor Generation")]
+    public GameObject floorPrefab;
 
     [Header("Build Mode Settings")]
-    public bool buildModeActive = false;          // Toggles building mode on/off
-    public GameObject buildUI;                    // Optional UI shown during build mode
+    public bool buildModeActive = false;
+    public GameObject buildUI;
 
     [Header("Drag Build Settings")]
-    private bool isDragging = false;              // True while dragging to place multiple pieces
-    private Vector3 dragStartPos;                 // World position where drag started
-    private Vector3 dragEndPos;                   // Current drag end position
-    private List<GameObject> dragPreviewObjects = new List<GameObject>(); // Preview objects along drag
-    public float wallSegmentLength = 20f;         // Default spacing between segments
+    private bool isDragging = false;
+    private Vector3 dragStartPos;
+    private Vector3 dragEndPos;
+    private List<GameObject> dragPreviewObjects = new List<GameObject>();
 
     void Update()
     {
-        // Toggle build mode with B
+        // Toggle Build Mode
         if (Input.GetKeyDown(KeyCode.B))
         {
             buildModeActive = !buildModeActive;
-
-            // Show/hide build UI
-            if (buildUI != null)
-                buildUI.SetActive(buildModeActive);
-
-            // Remove preview when leaving build mode
-            if (!buildModeActive && previewObject != null)
-                Destroy(previewObject);
+            if (buildUI) buildUI.SetActive(buildModeActive);
+            if (!buildModeActive && previewObject) Destroy(previewObject);
         }
 
         if (!buildModeActive) return;
 
-        // Undo last placement (Ctrl + Z)
-        if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.Z))
-        {
-            if (placedObjects.Count > 0)
-            {
-                GameObject last = placedObjects[placedObjects.Count - 1];
-                placedObjects.RemoveAt(placedObjects.Count - 1);
-                Destroy(last);
-            }
-        }
-
-        // Handle all live build input
         HandleHeightAdjustment();
         HandlePreview();
         HandlePlacementInput();
@@ -82,145 +71,191 @@ public class BuildingManager : MonoBehaviour
         HandleDrag();
     }
 
-    //  PREVIEW 
-    // Shows a ghost preview following the mouse, snapped to the grid.
+    // ----------------------------------------------------------------
+    // PREVIEW
     void HandlePreview()
     {
         if (previewObject == null)
         {
-            // Create preview version of current prefab
             if (buildPrefabs[selectedIndex]?.prefab == null) return;
             previewObject = Instantiate(buildPrefabs[selectedIndex].prefab);
-            foreach (var col in previewObject.GetComponentsInChildren<Collider>())
-                col.enabled = false; // disable colliders for preview
+            foreach (var c in previewObject.GetComponentsInChildren<Collider>())
+                c.enabled = false;
         }
 
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit, 5000f, buildSurfaceMask))
         {
             Vector3 gridPos = grid.GetNearestPointOnGrid(hit.point);
-            var cat = buildPrefabs[selectedIndex].category;
+            gridPos.y = currentHeight;
 
-            // Set height based on category
-            if (cat == BuildCategory.Wall || cat == BuildCategory.Shopfront || cat == BuildCategory.Decor)
-                gridPos.y = currentHeight;
-            else
-                gridPos.y = 0f;
+            // snap to grid corners (important!)
+            gridPos.x = Mathf.Round(gridPos.x / grid.gridSize) * grid.gridSize;
+            gridPos.z = Mathf.Round(gridPos.z / grid.gridSize) * grid.gridSize;
 
-            // Update preview transform
-            previewObject.transform.position = gridPos;
+            previewObject.transform.position = gridPos + Vector3.up * 0.05f;
             previewObject.transform.rotation = rotation;
         }
     }
 
-    //  SINGLE CLICK PLACEMENT
+    // ----------------------------------------------------------------
+    // SINGLE CLICK PLACEMENT
     void HandlePlacementInput()
     {
-        // Skip single-click if currently dragging (prevents duplicate wall)
         if (isDragging) return;
 
-        // Left click places a single prefab
         if (Input.GetMouseButtonDown(0))
         {
-            GameObject newPiece = Instantiate(buildPrefabs[selectedIndex].prefab,
-                                              previewObject.transform.position,
-                                              rotation);
-            placedObjects.Add(newPiece);
-        }
+            var cat = buildPrefabs[selectedIndex].category;
+            Vector3 pos = previewObject.transform.position;
+            Quaternion rot = rotation;
 
-        // Delete key removes selected building (if tagged)
-        if (Input.GetKeyDown(KeyCode.Delete))
-        {
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit))
+            switch (cat)
             {
-                if (hit.collider.CompareTag("Building"))
-                {
-                    placedObjects.Remove(hit.collider.gameObject);
-                    Destroy(hit.collider.gameObject);
-                }
+                case BuildCategory.Wall:
+                case BuildCategory.Shopfront:
+                    pos = grid.GetNearestPointOnGrid(pos);
+                    pos.y = currentHeight;
+                    Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+                    break;
+
+                case BuildCategory.Decor:
+                case BuildCategory.Default:
+                case BuildCategory.Runway:
+                    Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+                    break;
             }
         }
     }
 
+    // ----------------------------------------------------------------
     // ROTATION
     void HandleRotationInput()
     {
-        if (Input.GetKeyDown(KeyCode.R))
-            rotation *= Quaternion.Euler(0, 90, 0); // Rotate 90° each press
+        // Begin rotation
+        if (Input.GetKeyDown(KeyCode.R) && previewObject != null)
+        {
+            rotating = true;
+            lastMousePos = Input.mousePosition;
+            lockedPreviewPos = previewObject.transform.position; // lock preview position
+        }
+
+        // While holding R, rotate according to horizontal mouse movement
+        if (rotating && Input.GetKey(KeyCode.R))
+        {
+            Vector3 delta = Input.mousePosition - lastMousePos;
+            lastMousePos = Input.mousePosition;
+
+            float rotationSpeed = Input.GetKey(KeyCode.LeftShift) ? 0.1f : 0.25f; // fine-tune option
+            currentRotationY += delta.x * rotationSpeed;
+            currentRotationY = Mathf.Repeat(currentRotationY, 360f);
+            rotation = Quaternion.Euler(0, currentRotationY, 0);
+
+            // Keep preview locked in place while rotating
+            previewObject.transform.position = lockedPreviewPos;
+            previewObject.transform.rotation = rotation;
+        }
+
+        // Release R to confirm rotation and unlock
+        if (Input.GetKeyUp(KeyCode.R))
+        {
+            rotating = false;
+        }
     }
 
+    // ----------------------------------------------------------------
     // PREFAB CYCLING
     void HandleCycleInput()
     {
-        // Tab cycles forward
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             Destroy(previewObject);
             selectedIndex = (selectedIndex + 1) % buildPrefabs.Length;
         }
-
-        // Shift + Tab cycles backward
-        if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.Tab))
-        {
-            Destroy(previewObject);
-            selectedIndex = (selectedIndex - 1 + buildPrefabs.Length) % buildPrefabs.Length;
-        }
     }
 
-    // HEIGHT LAYER CONTROL
-    // Controls E/Q vertical stacking for modular pieces like walls or decor.
+    // ----------------------------------------------------------------
+    // HEIGHT / LAYER CONTROL (Sims-style)
     void HandleHeightAdjustment()
     {
         var cat = buildPrefabs[selectedIndex].category;
 
-        // Only layered categories use vertical offset
-        if (cat != BuildCategory.Wall && cat != BuildCategory.Shopfront && cat != BuildCategory.Decor)
+        if (cat == BuildCategory.Wall || cat == BuildCategory.Shopfront || cat == BuildCategory.Decor)
         {
-            currentHeight = 0f;
-            return;
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                currentLayer++;
+                currentHeight = currentLayer * wallHeightStep;
+                MoveCameraToHeight(currentHeight);
+                GenerateFloorForLayer(currentLayer);
+            }
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                currentLayer = Mathf.Max(0, currentLayer - 1);
+                currentHeight = currentLayer * wallHeightStep;
+                MoveCameraToHeight(currentHeight);
+            }
         }
-
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            currentLayer++;
-            currentHeight = currentLayer * wallHeightStep;
-            MoveCameraToHeight(currentHeight);
-        }
-
-        if (Input.GetKeyDown(KeyCode.Q))
-        {
-            currentLayer = Mathf.Max(0, currentLayer - 1);
-            currentHeight = currentLayer * wallHeightStep;
-            MoveCameraToHeight(currentHeight);
-        }
-    }
-
-    // CAMERA HEIGHT SYNC
-    float GetCurrentPrefabHeight()
-    {
-        GameObject prefab = buildPrefabs[selectedIndex].prefab;
-        Collider col = prefab.GetComponentInChildren<Collider>();
-        return col ? col.bounds.size.y : baseHeightStep;
+        else currentHeight = 0f;
     }
 
     void MoveCameraToHeight(float height)
     {
-        if (freeCam != null)
-            freeCam.SetTargetHeight(height);
+        if (freeCam) freeCam.SetTargetHeight(height);
     }
 
-    // DRAG BUILD LOGIC 
-    // Allows click & drag placement for modular pieces (walls, runways, shopfronts).
+    // ----------------------------------------------------------------
+    // FLOOR GENERATION (Sims-style)
+    void GenerateFloorForLayer(int layer)
+    {
+        string floorName = $"Floor_Layer_{layer}";
+        if (GameObject.Find(floorName)) return;
+
+        GameObject floorParent = new GameObject(floorName);
+        floorParent.transform.position = new Vector3(0, layer * wallHeightStep, 0);
+
+        // Define bounds by previously placed walls
+        var placedAtLayer = placedObjects
+            .Where(o => Mathf.Approximately(o.transform.position.y, layer * wallHeightStep))
+            .ToList();
+
+        if (placedAtLayer.Count == 0)
+        {
+            // create small default area 3x3 grid cells
+            for (int x = -1; x <= 1; x++)
+            {
+                for (int z = -1; z <= 1; z++)
+                {
+                    Vector3 pos = new Vector3(x * grid.gridSize, layer * wallHeightStep, z * grid.gridSize);
+                    Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
+                }
+            }
+            return;
+        }
+
+        float minX = placedAtLayer.Min(o => o.transform.position.x);
+        float maxX = placedAtLayer.Max(o => o.transform.position.x);
+        float minZ = placedAtLayer.Min(o => o.transform.position.z);
+        float maxZ = placedAtLayer.Max(o => o.transform.position.z);
+
+        for (float x = minX; x <= maxX; x += grid.gridSize)
+        {
+            for (float z = minZ; z <= maxZ; z += grid.gridSize)
+            {
+                Vector3 pos = new Vector3(x, layer * wallHeightStep, z);
+                Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // DRAG BUILD (Walls, Shopfronts, Runways)
     void HandleDrag()
     {
         var cat = buildPrefabs[selectedIndex].category;
-
-        // Only certain categories support dragging
         if (cat != BuildCategory.Wall && cat != BuildCategory.Shopfront && cat != BuildCategory.Runway)
             return;
 
-        // Raycast from camera to mouse position
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 5000f, buildSurfaceMask))
             return;
@@ -228,7 +263,6 @@ public class BuildingManager : MonoBehaviour
         Vector3 gridPos = grid.GetNearestPointOnGrid(hit.point);
         gridPos.y = currentHeight;
 
-        // Start drag
         if (Input.GetMouseButtonDown(0))
         {
             isDragging = true;
@@ -236,86 +270,61 @@ public class BuildingManager : MonoBehaviour
             dragEndPos = gridPos;
         }
 
-        // While dragging, continuously update ghost preview line
         if (isDragging && Input.GetMouseButton(0))
         {
             dragEndPos = gridPos;
             UpdateDragPreview(dragStartPos, dragEndPos);
         }
 
-        // Release mouse button to place line of objects
         if (isDragging && Input.GetMouseButtonUp(0))
         {
             isDragging = false;
-            PlaceDragWalls(dragStartPos, dragEndPos);
+            RemoveFirstPlacedPieceIfOverlapping(dragStartPos);
+            PlaceDragPieces(dragStartPos, dragEndPos, cat);
             ClearDragPreview();
         }
     }
 
-    // Creates temporary ghost versions of prefabs along drag path.
     void UpdateDragPreview(Vector3 start, Vector3 end)
     {
         ClearDragPreview();
 
-        start = grid.GetNearestPointOnGrid(start);
-        end = grid.GetNearestPointOnGrid(end);
-
-        Vector3 dir = (end - start);
-        float distance = dir.magnitude;
-        if (distance < 0.1f) return;
-
-        dir.Normalize();
-        Quaternion wallRot = Quaternion.LookRotation(dir, Vector3.up);
-
         float segLen = GetSegmentLengthForCategory(buildPrefabs[selectedIndex].category);
-        int count = Mathf.CeilToInt(distance / segLen);
+        start = grid.GetNearestPointOnGrid(start);
+        Vector3 dir = (end - start).normalized;
+
+        // Snap to 45° increments
+        dir.x = Mathf.Round(dir.x);
+        dir.z = Mathf.Round(dir.z);
+        dir.Normalize();
+
+        Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
+        float distance = Vector3.Distance(start, end);
+        int count = Mathf.Max(1, Mathf.CeilToInt(distance / segLen));
         Vector3 step = dir * segLen;
 
         for (int i = 0; i <= count; i++)
         {
             Vector3 pos = start + step * i;
-            GameObject ghost = Instantiate(buildPrefabs[selectedIndex].prefab, pos, wallRot);
-            foreach (var col in ghost.GetComponentsInChildren<Collider>())
-                col.enabled = false;
-            SetGhostMaterial(ghost, true);
+            pos.y = currentHeight;
+            GameObject ghost = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+            foreach (var col in ghost.GetComponentsInChildren<Collider>()) col.enabled = false;
             dragPreviewObjects.Add(ghost);
         }
     }
 
-    // Deletes all active ghost previews.
-    void ClearDragPreview()
+    void PlaceDragPieces(Vector3 start, Vector3 end, BuildCategory cat)
     {
-        foreach (var obj in dragPreviewObjects)
-            Destroy(obj);
-        dragPreviewObjects.Clear();
-    }
-
-    // Places actual objects along drag line (walls, shopfronts, runways, etc.)
-    void PlaceDragWalls(Vector3 start, Vector3 end)
-    {
-        // Prevents rogue "first click" wall from being left behind
-        if (placedObjects.Count > 0)
-        {
-            GameObject lastPlaced = placedObjects[placedObjects.Count - 1];
-            if (lastPlaced != null && lastPlaced.CompareTag("Building"))
-            {
-                Destroy(lastPlaced);
-                placedObjects.RemoveAt(placedObjects.Count - 1);
-            }
-        }
-
+        float segLen = GetSegmentLengthForCategory(cat);
         start = grid.GetNearestPointOnGrid(start);
-        end = grid.GetNearestPointOnGrid(end);
-
-        Vector3 dir = (end - start);
-        float distance = dir.magnitude;
-        if (distance < 0.1f) return;
-
+        Vector3 dir = (end - start).normalized;
+        dir.x = Mathf.Round(dir.x);
+        dir.z = Mathf.Round(dir.z);
         dir.Normalize();
-        Quaternion wallRot = Quaternion.LookRotation(dir, Vector3.up);
 
-        float segLen = GetSegmentLengthForCategory(buildPrefabs[selectedIndex].category);
-        int count = Mathf.CeilToInt(distance / segLen);
+        Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
+        float distance = Vector3.Distance(start, end);
+        int count = Mathf.Max(1, Mathf.CeilToInt(distance / segLen));
         Vector3 step = dir * segLen;
 
         for (int i = 0; i <= count; i++)
@@ -323,41 +332,43 @@ public class BuildingManager : MonoBehaviour
             Vector3 pos = start + step * i;
             pos.y = currentHeight;
 
-            GameObject newPiece = Instantiate(buildPrefabs[selectedIndex].prefab, pos, wallRot);
-            placedObjects.Add(newPiece);
-        }
+            // runway stretches only forward/backward
+            if (cat == BuildCategory.Runway && Mathf.Abs(dir.x) > 0 && Mathf.Abs(dir.z) > 0)
+                continue;
 
-        ClearDragPreview();
+            GameObject piece = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+            placedObjects.Add(piece);
+        }
     }
 
-    // Adjusts materials for preview objects (semi-transparent ghosts)
-    void SetGhostMaterial(GameObject obj, bool isGhost)
+    void ClearDragPreview()
     {
-        Renderer[] rends = obj.GetComponentsInChildren<Renderer>();
-        foreach (var r in rends)
-        {
-            foreach (var mat in r.materials)
-            {
-                Color c = mat.color;
-                c.a = isGhost ? 0.4f : 1f;
-                mat.color = c;
-            }
-        }
+        foreach (var o in dragPreviewObjects) Destroy(o);
+        dragPreviewObjects.Clear();
     }
 
-    // Returns segment spacing depending on category type.
     float GetSegmentLengthForCategory(BuildCategory cat)
     {
         switch (cat)
         {
-            case BuildCategory.Runway:
-                return 40f; // big pieces
-            case BuildCategory.Shopfront:
-                return 30f;
-            case BuildCategory.Wall:
-                return 20f;
-            default:
-                return wallSegmentLength;
+            case BuildCategory.Runway: return grid.gridSize * 3f;   // spans 3 tiles
+            case BuildCategory.Shopfront: return grid.gridSize * 1.5f;
+            case BuildCategory.Wall: return grid.gridSize;
+            default: return grid.gridSize;
+        }
+    }
+
+    void RemoveFirstPlacedPieceIfOverlapping(Vector3 startPos)
+    {
+        // Check for a wall placed very close to the drag start
+        Collider[] hits = Physics.OverlapSphere(startPos, grid.gridSize * 0.4f);
+        foreach (var hit in hits)
+        {
+            if (hit.CompareTag("Wall")) // or use your prefab category check
+            {
+                Destroy(hit.gameObject);
+                break;
+            }
         }
     }
 }

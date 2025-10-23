@@ -5,9 +5,9 @@ using UnityEngine;
 public class GridManager : MonoBehaviour
 {
     [Header("Grid Settings")]
-    public float gridSize = 10f;          // Size of one grid cell (spacing)
+    public float gridSize = 20f;          // Size of one grid cell (spacing)
     public Color gridColor = Color.gray;  // Color used for visual gizmos in scene view
-    public int gridExtent = 50;           // How far the grid extends from origin in gizmos
+    public int gridExtent = 500;           // How far the grid extends from origin in gizmos
 
     // GRID SNAP LOGIC
     // Returns nearest snapped point on the grid given a world-space position.
@@ -26,6 +26,7 @@ public class GridManager : MonoBehaviour
 
         return result;
     }
+
 
     // GRID VISUALIZATION
     // Draws visible grid lines in the Scene view (editor only).
