@@ -182,7 +182,7 @@ MonoBehaviour:
   wallHeightStep: 20
   floorPrefab: {fileID: 7356298520830970565, guid: b06f48dfb62b1f545a9087ba88e251ed,
     type: 3}
-  buildModeActive: 1
+  buildModeActive: 0
   buildUI: {fileID: 0}
 --- !u!4 &399285658
 Transform:
