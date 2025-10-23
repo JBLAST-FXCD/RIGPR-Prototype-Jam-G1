@@ -90,4 +90,28 @@ public class NPCController : MonoBehaviour
     {
         state = newState;
     }
+
+    public void FlagDoneAll()
+    {
+        state = NPCState.DoneAll;
+        NPCSpawner.Instance.RecycleNPC(this);
+    }
+
+    public void ResetNPC()
+    {
+        StageComplete = false;
+        currentStage = StageType.CheckIn;
+        currentChance = baseSuccessRate;
+        state = NPCState.Idle;
+        timer = baseProcessTime;
+
+        currentStageController = null;
+
+        transform.position = Vector3.zero;
+    }
+
+    public void MoveToQueuePoition(Vector3 target)
+    {
+        transform.position = target;
+    }
 }
