@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class FreeCamera : MonoBehaviour
@@ -24,20 +25,57 @@ public class FreeCamera : MonoBehaviour
 
     private Camera cam;
     private Vector3 lastMousePosition;
+    private Vector3 defaultPosition;
+    private Quaternion defaultRotation;
 
+    private bool isAutoPanning = false;
     void Start()
     {
         cam = GetComponent<Camera>();
         targetPosition = transform.position;
+        defaultPosition = transform.position;
+        defaultRotation = transform.rotation;
     }
 
     void Update()
     {
-        HandleMovement();
-        HandleMouseControls();
-        HandleZoom();
+    // Only allow manual input when NOT auto-panning
+    if (!isAutoPanning)
+        {
+            HandleMovement();
+            HandleMouseControls();
+            HandleZoom();
+        }
+        else
+        {
+            transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * panSpeed);
+
+            // stop panning when close enough
+            if (Vector3.Distance(transform.position, targetPosition) < 0.5f)
+                isAutoPanning = false;
+        }
     }
 
+    public void ResetToDefaultView()
+    {
+        StartCoroutine(RecenterCamera());
+    }
+
+    private IEnumerator RecenterCamera()
+    {
+        Vector3 startPos = transform.position;
+        Quaternion startRot = transform.rotation;
+        float elapsed = 0f;
+        float duration = 1f; // 1 second pan
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            transform.position = Vector3.Lerp(startPos, defaultPosition, elapsed / duration);
+            transform.rotation = Quaternion.Slerp(startRot, defaultRotation, elapsed / duration);
+            yield return null;
+        }
+    }
     void HandleMovement()
     {
         Vector3 input = Vector3.zero;
@@ -94,4 +132,12 @@ public class FreeCamera : MonoBehaviour
             targetPosition += transform.forward * scroll * zoomSpeed * Time.deltaTime;
         }
     }
+
+    public void SetTargetHeight(float height)
+    {
+        targetPosition = new Vector3(transform.position.x, height + 20f, transform.position.z);
+        isAutoPanning = true;
+    }
+
+
 }

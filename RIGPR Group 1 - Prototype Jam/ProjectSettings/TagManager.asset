@@ -4,15 +4,16 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - CheckIn
+  - Building
+  - Wall
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - BuildSurface
   - Water
   - UI
-  - 
+  - Building
   - 
   - 
   - 
