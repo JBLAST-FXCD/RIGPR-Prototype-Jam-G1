@@ -6,11 +6,11 @@ public class NPCSpawner : MonoBehaviour
 {
     public static NPCSpawner Instance;
 
-    [SerializeField] private GameObject npcPrefab;
+    [SerializeField] private List<GameObject> npcPrefabs;
     [SerializeField] private int poolSize = 50;
     [SerializeField] private float spawnInterval = 3f;
 
-    private List<NPCController> npcPool = new List<NPCController>();
+    private Dictionary<GameObject, List<NPCController>> npcPool = new();
     private float timer;
 
     private void Awake()
@@ -20,19 +20,26 @@ public class NPCSpawner : MonoBehaviour
 
     private void Start()
     {
-        for (int i=0; i < poolSize; i++)
+        foreach (var prefab in npcPrefabs)
         {
-            var npcObj = Instantiate(npcPrefab, transform);
-            npcObj.gameObject.SetActive(false);
+            var pool = new List<NPCController>();
 
-            var npc = npcObj.GetComponent<NPCController>();
-            npcPool.Add(npc);
+            for (int i = 0; i < poolSize; i++)
+            {
+                var npcObj = Instantiate(prefab, transform);
+                npcObj.SetActive(false);
+                var npc = npcObj.GetComponent<NPCController>();
+                pool.Add(npc);
+            }
+
+            npcPool[prefab] = pool;
         }
     }
 
     private void Update()
     {
         timer -= Time.deltaTime;
+
         if (timer<= 0)
         {
             SpawnNPC();
@@ -42,16 +49,16 @@ public class NPCSpawner : MonoBehaviour
 
     private void SpawnNPC()
     {
-        NPCController npc = npcPool.Find(n => !n.gameObject.activeSelf);
 
-        if (npc == null)
-        {
-            return;
-        }
+        var checkInStage = FlowManager.Instance.GetStage(StageType.CheckIn);
+
+        GameObject chosenPrefab = npcPrefabs[Random.Range(0, npcPrefabs.Count)];
+
+        var npc = npcPool[chosenPrefab].Find(n => n != null && !n.gameObject.activeSelf);
 
         npc.gameObject.SetActive(true);
         npc.ResetNPC();
-        FlowManager.Instance.GetStage(StageType.CheckIn).EnqueueNPC(npc);
+        checkInStage.EnqueueNPC(npc);
     }
 
     public void RecycleNPC(NPCController npc)

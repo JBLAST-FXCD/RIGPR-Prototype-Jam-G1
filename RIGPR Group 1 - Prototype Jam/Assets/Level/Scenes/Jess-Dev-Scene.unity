@@ -282,7 +282,7 @@ MonoBehaviour:
   stageType: 2
   entryPoint: {fileID: 854159705}
   maxNPCCapacity: 1
-  queueSpacing: 1.5
+  queueSpacing: -3
   queueOrigin: {fileID: 625821041}
 --- !u!1 &625821040
 GameObject:
@@ -765,7 +765,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stageType: 1
   entryPoint: {fileID: 433006105}
-  maxNPCCapacity: 4
+  maxNPCCapacity: 1
   queueSpacing: -3
   queueOrigin: {fileID: 738035929}
 --- !u!1 &963714288
@@ -1060,7 +1060,7 @@ MonoBehaviour:
   stageType: 3
   entryPoint: {fileID: 1381768069}
   maxNPCCapacity: 1
-  queueSpacing: 1.5
+  queueSpacing: -3
   queueOrigin: {fileID: 2044467776}
 --- !u!1 &1381768068
 GameObject:
