@@ -108,55 +108,59 @@ public class BuildingManager : MonoBehaviour
         {
             var cat = buildPrefabs[selectedIndex].category;
             Vector3 pos = previewObject.transform.position;
-            Quaternion rot = rotation;
+            Quaternion rot = rotation; // <-- always use the current preview rotation
 
-            switch (cat)
-            {
-                case BuildCategory.Wall:
-                case BuildCategory.Shopfront:
-                    pos = grid.GetNearestPointOnGrid(pos);
-                    pos.y = currentHeight;
-                    Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
-                    break;
+            pos = grid.GetNearestPointOnGrid(pos);
+            pos.y = currentHeight;
 
-                case BuildCategory.Decor:
-                case BuildCategory.Default:
-                case BuildCategory.Runway:
-                    Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
-                    break;
-            }
+            GameObject piece = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+            placedObjects.Add(piece);
         }
     }
 
-    // ----------------------------------------------------------------
-    // ROTATION
     void HandleRotationInput()
     {
-        // Begin rotation
-        if (Input.GetKeyDown(KeyCode.R) && previewObject != null)
+        if (previewObject == null) return;
+
+        BuildCategory cat = buildPrefabs[selectedIndex].category;
+        bool freeRotate = (cat == BuildCategory.Decor || cat == BuildCategory.Default);
+
+        // --- Tap R: snap +45° for everyone ---
+        if (Input.GetKeyDown(KeyCode.R))
         {
-            rotating = true;
-            lastMousePos = Input.mousePosition;
-            lockedPreviewPos = previewObject.transform.position; // lock preview position
+            currentRotationY = Mathf.Repeat(currentRotationY + 45f, 360f);
+            rotation = Quaternion.Euler(0f, currentRotationY, 0f);
+
+            // apply immediately
+            previewObject.transform.rotation = rotation;
+
+            // Only enter fine-rotate mode for free-rotation categories
+            if (freeRotate)
+            {
+                rotating = true;
+                lastMousePos = Input.mousePosition;
+                lockedPreviewPos = previewObject.transform.position; // lock position while rotating
+            }
         }
 
-        // While holding R, rotate according to horizontal mouse movement
-        if (rotating && Input.GetKey(KeyCode.R))
+        // --- Hold R: fine rotation ONLY for Decor/Default ---
+        if (rotating && Input.GetKey(KeyCode.R) && freeRotate)
         {
             Vector3 delta = Input.mousePosition - lastMousePos;
             lastMousePos = Input.mousePosition;
 
-            float rotationSpeed = Input.GetKey(KeyCode.LeftShift) ? 0.1f : 0.25f; // fine-tune option
-            currentRotationY += delta.x * rotationSpeed;
-            currentRotationY = Mathf.Repeat(currentRotationY, 360f);
-            rotation = Quaternion.Euler(0, currentRotationY, 0);
+            // Shift = finer control
+            float speed = Input.GetKey(KeyCode.LeftShift) ? 0.15f : 0.35f;
+            currentRotationY = Mathf.Repeat(currentRotationY + delta.x * speed, 360f);
 
-            // Keep preview locked in place while rotating
+            rotation = Quaternion.Euler(0f, currentRotationY, 0f);
+
+            // keep preview from drifting while rotating
             previewObject.transform.position = lockedPreviewPos;
             previewObject.transform.rotation = rotation;
         }
 
-        // Release R to confirm rotation and unlock
+        // --- Release R: end fine rotation (if any) ---
         if (Input.GetKeyUp(KeyCode.R))
         {
             rotating = false;
@@ -219,6 +223,15 @@ public class BuildingManager : MonoBehaviour
             .Where(o => Mathf.Approximately(o.transform.position.y, layer * wallHeightStep))
             .ToList();
 
+        if (placedAtLayer.Count > 0)
+        {
+            foreach (var wall in placedAtLayer)
+            {
+                Vector3 pos = wall.transform.position + Vector3.up * 0.05f;
+                Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
+            }
+        }
+
         if (placedAtLayer.Count == 0)
         {
             // create small default area 3x3 grid cells
@@ -248,7 +261,6 @@ public class BuildingManager : MonoBehaviour
         }
     }
 
-    // ----------------------------------------------------------------
     // DRAG BUILD (Walls, Shopfronts, Runways)
     void HandleDrag()
     {
@@ -285,33 +297,34 @@ public class BuildingManager : MonoBehaviour
         }
     }
 
-    void UpdateDragPreview(Vector3 start, Vector3 end)
-    {
-        ClearDragPreview();
 
-        float segLen = GetSegmentLengthForCategory(buildPrefabs[selectedIndex].category);
-        start = grid.GetNearestPointOnGrid(start);
-        Vector3 dir = (end - start).normalized;
+      void UpdateDragPreview(Vector3 start, Vector3 end)
+      {
+          ClearDragPreview();
 
-        // Snap to 45° increments
-        dir.x = Mathf.Round(dir.x);
-        dir.z = Mathf.Round(dir.z);
-        dir.Normalize();
+          float segLen = GetSegmentLengthForCategory(buildPrefabs[selectedIndex].category);
+          start = grid.GetNearestPointOnGrid(start);
+          Vector3 dir = (end - start).normalized;
 
-        Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
-        float distance = Vector3.Distance(start, end);
-        int count = Mathf.Max(1, Mathf.CeilToInt(distance / segLen));
-        Vector3 step = dir * segLen;
+          // Snap to 45 degree increments
+          dir.x = Mathf.Round(dir.x);
+          dir.z = Mathf.Round(dir.z);
+          dir.Normalize();
 
-        for (int i = 0; i <= count; i++)
-        {
-            Vector3 pos = start + step * i;
-            pos.y = currentHeight;
-            GameObject ghost = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
-            foreach (var col in ghost.GetComponentsInChildren<Collider>()) col.enabled = false;
-            dragPreviewObjects.Add(ghost);
-        }
-    }
+          Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
+          float distance = Vector3.Distance(start, end);
+          int count = Mathf.Max(1, Mathf.CeilToInt(distance / segLen));
+          Vector3 step = dir * segLen;
+
+          for (int i = 0; i <= count; i++)
+          {
+              Vector3 pos = start + step * i;
+              pos.y = currentHeight;
+              GameObject ghost = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
+              foreach (var col in ghost.GetComponentsInChildren<Collider>()) col.enabled = false;
+              dragPreviewObjects.Add(ghost);
+          }
+      }
 
     void PlaceDragPieces(Vector3 start, Vector3 end, BuildCategory cat)
     {
@@ -322,7 +335,9 @@ public class BuildingManager : MonoBehaviour
         dir.z = Mathf.Round(dir.z);
         dir.Normalize();
 
-        Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
+        // Use player-defined rotation, not LookRotation
+        Quaternion rot = rotation;
+
         float distance = Vector3.Distance(start, end);
         int count = Mathf.Max(1, Mathf.CeilToInt(distance / segLen));
         Vector3 step = dir * segLen;
@@ -332,7 +347,6 @@ public class BuildingManager : MonoBehaviour
             Vector3 pos = start + step * i;
             pos.y = currentHeight;
 
-            // runway stretches only forward/backward
             if (cat == BuildCategory.Runway && Mathf.Abs(dir.x) > 0 && Mathf.Abs(dir.z) > 0)
                 continue;
 

@@ -13,10 +13,12 @@ public class GridManager : MonoBehaviour
     // Returns nearest snapped point on the grid given a world-space position.
     public Vector3 GetNearestPointOnGrid(Vector3 position)
     {
-        // Snap each axis to the nearest multiple of gridSize
-        float xCount = Mathf.Round(position.x / gridSize);
-        float yCount = Mathf.Round(position.y / gridSize);
-        float zCount = Mathf.Round(position.z / gridSize);
+        // Snap each axis relative to grid origin (this GameObject)
+        Vector3 localPos = position - transform.position;
+
+        float xCount = Mathf.Round(localPos.x / gridSize);
+        float yCount = Mathf.Round(localPos.y / gridSize);
+        float zCount = Mathf.Round(localPos.z / gridSize);
 
         Vector3 result = new Vector3(
             xCount * gridSize,
@@ -24,7 +26,8 @@ public class GridManager : MonoBehaviour
             zCount * gridSize
         );
 
-        return result;
+        // Return back to world space
+        return result + transform.position;
     }
 
 
