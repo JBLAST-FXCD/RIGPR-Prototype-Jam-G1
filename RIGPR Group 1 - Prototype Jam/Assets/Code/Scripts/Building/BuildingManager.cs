@@ -210,24 +210,37 @@ public class BuildingManager : MonoBehaviour
     {
         var cat = buildPrefabs[selectedIndex].category;
 
-        // Walls, Shopfronts, Decor move through layers
         if (cat == BuildCategory.Wall || cat == BuildCategory.Shopfront || cat == BuildCategory.Decor)
         {
+            // Go up a layer
             if (Input.GetKeyDown(KeyCode.E))
             {
                 currentLayer++;
                 currentHeight = currentLayer * wallHeightStep;
                 MoveCameraToHeight(currentHeight);
+
+                // Always rebuild floor for this layer (so new walls below count)
                 GenerateFloorForLayer(currentLayer);
+
+                // Refresh visibility after floor generation
+                ApplyLayerVisibility(currentLayer);
             }
+
+            // Go down a layer
             if (Input.GetKeyDown(KeyCode.Q))
             {
                 currentLayer = Mathf.Max(0, currentLayer - 1);
                 currentHeight = currentLayer * wallHeightStep;
                 MoveCameraToHeight(currentHeight);
+
+                // Refresh visibility so upper layers hide again
+                ApplyLayerVisibility(currentLayer);
             }
         }
-        else currentHeight = 0f;
+        else
+        {
+            currentHeight = 0f;
+        }
     }
 
     void MoveCameraToHeight(float height)
@@ -239,57 +252,180 @@ public class BuildingManager : MonoBehaviour
     // Builds floor tiles above walls or closed rooms
     void GenerateFloorForLayer(int layer)
     {
+        // Name + rebuild if floor already exists
         string floorName = $"Floor_Layer_{layer}";
-        if (GameObject.Find(floorName)) return;
+        var old = GameObject.Find(floorName);
+        if (old != null) Destroy(old); // Rebuild every time
 
+        // Parent object to keep hierarchy tidy
         GameObject floorParent = new GameObject(floorName);
         floorParent.transform.position = new Vector3(0, layer * wallHeightStep, 0);
 
-        // Find walls on current layer
-        var placedAtLayer = placedObjects
-            .Where(o => Mathf.Approximately(o.transform.position.y, layer * wallHeightStep))
+        // Collect all walls on the layer BELOW
+        var wallObjs = placedObjects
+            .Where(o => o != null &&
+                (o.CompareTag("Wall")) &&
+                Mathf.Approximately(o.transform.position.y, (layer - 1) * wallHeightStep))
             .ToList();
 
-        // Create floor tiles above each wall
-        if (placedAtLayer.Count > 0)
-        {
-            foreach (var wall in placedAtLayer)
-            {
-                Vector3 pos = wall.transform.position + Vector3.up * 0.05f;
-                Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
-            }
-        }
+        if (wallObjs.Count == 0) return; // no walls = no floor
 
-        // Fallback - create 3x3 default platform
-        if (placedAtLayer.Count == 0)
+        // Group nearby walls into "rooms"
+        List<List<GameObject>> roomGroups = GroupWallsByProximity(wallObjs, grid.gridSize * 2f);
+
+        // Fill the area between walls with floor tiles
+        foreach (var group in roomGroups)
         {
-            for (int x = -1; x <= 1; x++)
+            if (group.Count < 3) continue;
+
+            bool isClosed = IsRoomClosed(group, grid.gridSize * 1.5f);
+
+            // --- Accurate bounding box based on rotated wall bounds ---
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minZ = float.MaxValue, maxZ = float.MinValue;
+
+            foreach (var wall in group)
             {
-                for (int z = -1; z <= 1; z++)
+                if (wall == null) continue;
+                Renderer rend = wall.GetComponentInChildren<Renderer>();
+                if (rend == null) continue;
+
+                Bounds b = rend.bounds; // world-space bounds respect rotation
+                minX = Mathf.Min(minX, b.min.x);
+                maxX = Mathf.Max(maxX, b.max.x);
+                minZ = Mathf.Min(minZ, b.min.z);
+                maxZ = Mathf.Max(maxZ, b.max.z);
+            }
+
+            // --- Slight inner offset to prevent visible lip ---
+            float padding = grid.gridSize * 0.05f;
+            minX += padding;
+            maxX -= padding;
+            minZ += padding;
+            maxZ -= padding;
+
+            // --- Fill the bounded area with floor tiles ---
+            for (float x = minX; x <= maxX; x += grid.gridSize)
+            {
+                for (float z = minZ; z <= maxZ; z += grid.gridSize)
                 {
-                    Vector3 pos = new Vector3(x * grid.gridSize, layer * wallHeightStep, z * grid.gridSize);
-                    Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
+                    Vector3 tilePos = new Vector3(x, layer * wallHeightStep, z);
+
+                    if (isClosed)
+                    {
+                        // Closed room - fill fully
+                        Instantiate(floorPrefab, tilePos, Quaternion.identity, floorParent.transform);
+                    }
+                    else
+                    {
+                        // Open layout - only place tiles near walls
+                        bool nearWall = group.Any(w =>
+                            Vector3.Distance(tilePos, w.transform.position) <= grid.gridSize * 1.1f);
+                        if (nearWall)
+                            Instantiate(floorPrefab, tilePos, Quaternion.identity, floorParent.transform);
+                    }
                 }
             }
-            return;
         }
 
-        // Fill in between extreme wall bounds
-        float minX = placedAtLayer.Min(o => o.transform.position.x);
-        float maxX = placedAtLayer.Max(o => o.transform.position.x);
-        float minZ = placedAtLayer.Min(o => o.transform.position.z);
-        float maxZ = placedAtLayer.Max(o => o.transform.position.z);
+        // After generating floors, refresh visibility
+        ApplyLayerVisibility(layer);
+    }
 
-        for (float x = minX; x <= maxX; x += grid.gridSize)
+    void ApplyLayerVisibility(int activeLayer)
+    {
+        float currentY = activeLayer * wallHeightStep;
+
+        // --- Handle placed objects ---
+        foreach (var obj in placedObjects)
         {
-            for (float z = minZ; z <= maxZ; z += grid.gridSize)
+            if (obj == null) continue;
+
+            float objY = obj.transform.position.y;
+            bool isWall = obj.CompareTag("Wall") || obj.CompareTag("Shopfront");
+
+            // Walls: visible if at or below current layer
+            if (isWall)
             {
-                Vector3 pos = new Vector3(x, layer * wallHeightStep, z);
-                Instantiate(floorPrefab, pos, Quaternion.identity, floorParent.transform);
+                obj.SetActive(objY <= currentY);
             }
+            else
+            {
+                // Non-walls: visible only on the current layer
+                obj.SetActive(Mathf.Approximately(objY, currentY));
+            }
+        }
+
+        // --- Handle floors ---
+        foreach (Transform child in transform)
+        {
+            if (!child.name.StartsWith("Floor_Layer_")) continue;
+
+            float layerY = child.position.y;
+            int floorLayerIndex = Mathf.RoundToInt(layerY / wallHeightStep);
+
+            // Show all floors below or equal to current layer
+            bool visible = floorLayerIndex <= activeLayer;
+            child.gameObject.SetActive(visible);
+        }
+
+        // --- Extra safety for tagged floor objects (optional) ---
+        var allFloors = GameObject.FindGameObjectsWithTag("Floor");
+        foreach (var floor in allFloors)
+        {
+            int floorLayerIndex = Mathf.RoundToInt(floor.transform.position.y / wallHeightStep);
+            floor.SetActive(floorLayerIndex <= activeLayer);
         }
     }
 
+    bool IsRoomClosed(List<GameObject> walls, float threshold)
+    {
+        if (walls.Count < 3) return false;
+
+        foreach (var wall in walls)
+        {
+            bool hasNeighbor = walls.Any(other =>
+                other != wall &&
+                Vector3.Distance(wall.transform.position, other.transform.position) <= threshold);
+            if (!hasNeighbor) return false;
+        }
+        return true;
+    }
+
+    List<List<GameObject>> GroupWallsByProximity(List<GameObject> walls, float threshold)
+    {
+        List<List<GameObject>> groups = new List<List<GameObject>>();
+        HashSet<GameObject> visited = new HashSet<GameObject>();
+
+        foreach (var wall in walls)
+        {
+            if (visited.Contains(wall)) continue;
+
+            List<GameObject> group = new List<GameObject>();
+            Queue<GameObject> toVisit = new Queue<GameObject>();
+            toVisit.Enqueue(wall);
+
+            while (toVisit.Count > 0)
+            {
+                var current = toVisit.Dequeue();
+                if (visited.Contains(current)) continue;
+                visited.Add(current);
+                group.Add(current);
+
+                foreach (var other in walls)
+                {
+                    if (other == current || visited.Contains(other)) continue;
+                    if (Vector3.Distance(current.transform.position, other.transform.position) <= threshold)
+                        toVisit.Enqueue(other);
+                }
+            }
+
+            if (group.Count > 0)
+                groups.Add(group);
+        }
+
+        return groups;
+    }
     // DRAG PLACEMENT SYSTEM
     // Used for continuous wall, shopfront, and runway placement
     void HandleDrag()

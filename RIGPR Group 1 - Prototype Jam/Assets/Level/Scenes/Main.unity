@@ -382,7 +382,7 @@ MonoBehaviour:
     category: 1
   - prefab: {fileID: 7356298520830970565, guid: b06f48dfb62b1f545a9087ba88e251ed,
       type: 3}
-    category: 1
+    category: 0
   - prefab: {fileID: 3127855306542017919, guid: 771debd63c5fca94aa83e58a5881c7ac,
       type: 3}
     category: 4
