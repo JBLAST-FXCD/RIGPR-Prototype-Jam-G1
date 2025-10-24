@@ -78,4 +78,9 @@ public class StageController : MonoBehaviour
             index++;
         }
     }
+
+    public void ForceQueueUpdate()
+    {
+        UpdateQueuePositions();
+    }
 }
