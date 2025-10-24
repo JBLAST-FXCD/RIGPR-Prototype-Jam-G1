@@ -374,39 +374,41 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 72
   buildPrefabs:
-  - prefab: {fileID: 3175948312394199845, guid: d4eee02cd14d83e44b3637dc56358c07,
+  - prefab: {fileID: 1581277271781037825, guid: b28ce3e00799989429f5bab4c520ddba,
       type: 3}
-    category: 0
-  - prefab: {fileID: 8748925274253616788, guid: b3fae81c848c063418a26b52dae274e3,
-      type: 3}
-    category: 3
-  - prefab: {fileID: 8029711924985284363, guid: 28e28261006992e41b3c9b3fbbea7a41,
-      type: 3}
-    category: 0
+    category: 1
   - prefab: {fileID: 8180998622829763310, guid: 4bc1dc49619e3f749b028d24af7fb317,
+      type: 3}
+    category: 1
+  - prefab: {fileID: 7356298520830970565, guid: b06f48dfb62b1f545a9087ba88e251ed,
       type: 3}
     category: 1
   - prefab: {fileID: 3127855306542017919, guid: 771debd63c5fca94aa83e58a5881c7ac,
       type: 3}
     category: 4
-  - prefab: {fileID: 1581277271781037825, guid: b28ce3e00799989429f5bab4c520ddba,
-      type: 3}
-    category: 1
-  - prefab: {fileID: 7356298520830970565, guid: b06f48dfb62b1f545a9087ba88e251ed,
-      type: 3}
-    category: 4
-  - prefab: {fileID: 919132149155446097, guid: 591e182ea940f114f8eea17bfeb327bd, type: 3}
-    category: 3
-  - prefab: {fileID: 5854723667285857396, guid: 758f2b2effc4ad6468f665c63800c389,
+  - prefab: {fileID: 3175948312394199845, guid: d4eee02cd14d83e44b3637dc56358c07,
       type: 3}
     category: 0
-  - prefab: {fileID: 919132149155446097, guid: 2e9191cbab232604297626e90305b3a7, type: 3}
+  - prefab: {fileID: 8029711924985284363, guid: 28e28261006992e41b3c9b3fbbea7a41,
+      type: 3}
+    category: 0
+  - prefab: {fileID: 1195511251426317955, guid: 5cebe860df9f0d7489291c735e0e2c98,
+      type: 3}
+    category: 1
+  - prefab: {fileID: 7699582003758715341, guid: 70786bc1f7721ec4fb159db6557bfab2,
+      type: 3}
+    category: 0
+  - prefab: {fileID: 7699582003758715341, guid: bf563d347b4fedf4ea86b7f72914942e,
+      type: 3}
     category: 3
-  - prefab: {fileID: 919132149155446097, guid: c57454fce4c33194c8f0c44c357d3a94, type: 3}
+  - prefab: {fileID: 7699582003758715341, guid: 3e673b85aaeee1b458db51d5a6e78c92,
+      type: 3}
     category: 3
-  - prefab: {fileID: 919132149155446097, guid: 5fe13971b763d7b408b5ba0abefc884f, type: 3}
+  - prefab: {fileID: 2923166565202870012, guid: e6f7a9fbaa4dff9468fbcce08d22da3c,
+      type: 3}
     category: 3
-  - prefab: {fileID: 919132149155446097, guid: 01fa0d2dacd054b47ae73043faa97bc3, type: 3}
+  - prefab: {fileID: 8748925274253616788, guid: b3fae81c848c063418a26b52dae274e3,
+      type: 3}
     category: 3
   wallHeightStep: 20
   floorPrefab: {fileID: 7356298520830970565, guid: b06f48dfb62b1f545a9087ba88e251ed,
