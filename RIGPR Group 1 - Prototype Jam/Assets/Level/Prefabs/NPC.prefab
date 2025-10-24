@@ -47,8 +47,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   currentStage: 1
   baseProcessTime: 3
-  baseSuccessRate: 0.6
-  successRateIncrement: 0.1
+  baseSuccessRate: 0.3
+  successRateIncrement: 0.2
+  baseMoneyEarned: 150
   StageComplete: 0
 --- !u!1001 &1622489022274054170
 PrefabInstance:

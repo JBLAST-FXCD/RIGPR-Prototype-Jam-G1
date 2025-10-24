@@ -153,7 +153,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   currentStage: 1
-  baseProcessTime: 1
-  baseSuccessRate: 1
+  baseProcessTime: 3
+  baseSuccessRate: 0.5
   successRateIncrement: 0.1
+  baseMoneyEarned: 200
   StageComplete: 0

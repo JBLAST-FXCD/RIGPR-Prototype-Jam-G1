@@ -52,6 +52,7 @@ public class NPCSpawner : MonoBehaviour
 
         var checkInStage = FlowManager.Instance.GetStage(StageType.CheckIn);
 
+        // randomly selects npc type, finds first one in queue that isnt active or null
         GameObject chosenPrefab = npcPrefabs[Random.Range(0, npcPrefabs.Count)];
 
         var npc = npcPool[chosenPrefab].Find(n => n != null && !n.gameObject.activeSelf);
