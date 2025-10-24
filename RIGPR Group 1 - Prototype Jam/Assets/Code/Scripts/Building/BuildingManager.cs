@@ -108,7 +108,7 @@ public class BuildingManager : MonoBehaviour
 
             var cat = buildPrefabs[selectedIndex].category;
 
-            // --- NEW: Free placement mode for Decor/Default while holding Shift ---
+            // Free placement mode for Decor/Default while holding Shift
             bool freePlacement = (Input.GetKey(KeyCode.LeftShift) &&
                                   (cat == BuildCategory.Decor || cat == BuildCategory.Default));
 
@@ -280,7 +280,7 @@ public class BuildingManager : MonoBehaviour
 
             bool isClosed = IsRoomClosed(group, grid.gridSize * 1.5f);
 
-            // --- Accurate bounding box based on rotated wall bounds ---
+            //Accurate bounding box based on rotated wall bounds
             float minX = float.MaxValue, maxX = float.MinValue;
             float minZ = float.MaxValue, maxZ = float.MinValue;
 
@@ -297,14 +297,14 @@ public class BuildingManager : MonoBehaviour
                 maxZ = Mathf.Max(maxZ, b.max.z);
             }
 
-            // --- Slight inner offset to prevent visible lip ---
+            //Slight inner offset to prevent visible lip
             float padding = grid.gridSize * 0.05f;
             minX += padding;
             maxX -= padding;
             minZ += padding;
             maxZ -= padding;
 
-            // --- Fill the bounded area with floor tiles ---
+            //Fill the bounded area with floor tiles
             for (float x = minX; x <= maxX; x += grid.gridSize)
             {
                 for (float z = minZ; z <= maxZ; z += grid.gridSize)
@@ -336,7 +336,7 @@ public class BuildingManager : MonoBehaviour
     {
         float currentY = activeLayer * wallHeightStep;
 
-        // --- Handle placed objects ---
+        //Handle placed objects
         foreach (var obj in placedObjects)
         {
             if (obj == null) continue;
@@ -351,12 +351,12 @@ public class BuildingManager : MonoBehaviour
             }
             else
             {
-                // Non-walls: visible only on the current layer
+                // Non walls visible only on the current layer
                 obj.SetActive(Mathf.Approximately(objY, currentY));
             }
         }
 
-        // --- Handle floors ---
+        //Handle floors
         foreach (Transform child in transform)
         {
             if (!child.name.StartsWith("Floor_Layer_")) continue;
@@ -369,7 +369,7 @@ public class BuildingManager : MonoBehaviour
             child.gameObject.SetActive(visible);
         }
 
-        // --- Extra safety for tagged floor objects (optional) ---
+        //Extra safety for tagged floor objects
         var allFloors = GameObject.FindGameObjectsWithTag("Floor");
         foreach (var floor in allFloors)
         {
@@ -380,15 +380,19 @@ public class BuildingManager : MonoBehaviour
 
     bool IsRoomClosed(List<GameObject> walls, float threshold)
     {
+        // A room can't be closed if it has fewer than 3 walls
         if (walls.Count < 3) return false;
 
         foreach (var wall in walls)
         {
+            // Check if this wall has at least one neighbouring wall close by
             bool hasNeighbor = walls.Any(other =>
                 other != wall &&
                 Vector3.Distance(wall.transform.position, other.transform.position) <= threshold);
+            // If any wall stands alone (no close neighbour), the "room" is open
             if (!hasNeighbor) return false;
         }
+        // Every wall has a neighbour within range — treat as a closed loop
         return true;
     }
 
@@ -399,8 +403,10 @@ public class BuildingManager : MonoBehaviour
 
         foreach (var wall in walls)
         {
+            // Skip walls already assigned to a group
             if (visited.Contains(wall)) continue;
 
+            // Start a new group and BFS queue
             List<GameObject> group = new List<GameObject>();
             Queue<GameObject> toVisit = new Queue<GameObject>();
             toVisit.Enqueue(wall);
@@ -412,14 +418,19 @@ public class BuildingManager : MonoBehaviour
                 visited.Add(current);
                 group.Add(current);
 
+                // Look for other walls close to this one
                 foreach (var other in walls)
                 {
                     if (other == current || visited.Contains(other)) continue;
+
+                    // If another wall is within threshold distance,
+                    // consider it connected and add to the queue
                     if (Vector3.Distance(current.transform.position, other.transform.position) <= threshold)
                         toVisit.Enqueue(other);
                 }
             }
 
+            // Add finished group to the list if it has any members
             if (group.Count > 0)
                 groups.Add(group);
         }
@@ -473,7 +484,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     // DRAG PREVIEW
-    // Visualizes continuous placement while dragging
+    // Visualises continuous placement while dragging
     void UpdateDragPreview(Vector3 start, Vector3 end)
     {
         ClearDragPreview();
@@ -502,7 +513,7 @@ public class BuildingManager : MonoBehaviour
         }
     }
 
-    // FINALIZE DRAG PLACEMENT
+    // FINALISE DRAG PLACEMENT
     void PlaceDragPieces(Vector3 start, Vector3 end, BuildCategory cat)
     {
         float segLen = GetSegmentLengthForCategory(cat);
