@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 using Random = UnityEngine.Random;
 
 public class NPCController : MonoBehaviour
@@ -12,10 +13,12 @@ public class NPCController : MonoBehaviour
     // represents percentages
     public float baseSuccessRate = 0.3f;
     public float successRateIncrement = 0.1f;
+    public float baseMoneyEarned = 300f;
 
     private StageController currentStageController;
     private float timer;
     private float currentChance;
+    private int totalFailedAttempts = 0;
 
     private NPCState state;
     public bool StageComplete = false;
@@ -23,6 +26,7 @@ public class NPCController : MonoBehaviour
     private void Start()
     {
         currentChance = baseSuccessRate;
+        totalFailedAttempts = 0;
 
         // incomplete, to be updated with movement/pathfinding system
         var startStage = FlowManager.Instance.GetStage(currentStage);
@@ -82,6 +86,7 @@ public class NPCController : MonoBehaviour
         {
             // increments chance on failure
             currentChance = Mathf.Min(1f, currentChance + successRateIncrement);
+            totalFailedAttempts++;
             // potential link to npc "mood" system here
         }
     }
@@ -94,6 +99,10 @@ public class NPCController : MonoBehaviour
     public void FlagDoneAll()
     {
         state = NPCState.DoneAll;
+
+        float earned = baseMoneyEarned / Mathf.Max(1, totalFailedAttempts);
+        MoneyManager.Instance.AddMoney(earned);
+
         NPCSpawner.Instance.RecycleNPC(this);
     }
 
