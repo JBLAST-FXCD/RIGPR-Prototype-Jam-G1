@@ -37,7 +37,9 @@ public class FlowManager : MonoBehaviour
 
         if (next != StageType.None)
         {
+            var nextStage = stages[next];
             npc.GoToStage(stages[next]);
+            nextStage.ForceQueueUpdate();
         }
         else
         {
