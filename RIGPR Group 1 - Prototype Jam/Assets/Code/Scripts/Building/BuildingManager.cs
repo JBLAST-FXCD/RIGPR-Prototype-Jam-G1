@@ -92,28 +92,34 @@ public class BuildingManager : MonoBehaviour
     // Creates a transparent preview object that follows the grid
     void HandlePreview()
     {
-        // Create preview if it doesn’t exist yet
         if (previewObject == null)
         {
             if (buildPrefabs[selectedIndex]?.prefab == null) return;
             previewObject = Instantiate(buildPrefabs[selectedIndex].prefab);
             foreach (var c in previewObject.GetComponentsInChildren<Collider>())
-                c.enabled = false; // disable collisions on preview
+                c.enabled = false;
         }
 
-        // Raycast to mouse position to project onto grid
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit, 5000f, buildSurfaceMask))
         {
-            Vector3 gridPos = grid.GetNearestPointOnGrid(hit.point);
-            gridPos.y = currentHeight;
+            Vector3 pos = hit.point;
+            pos.y = currentHeight;
 
-            // Snap to grid corners (ensures alignment)
-            gridPos.x = Mathf.Round(gridPos.x / grid.gridSize) * grid.gridSize;
-            gridPos.z = Mathf.Round(gridPos.z / grid.gridSize) * grid.gridSize;
+            var cat = buildPrefabs[selectedIndex].category;
 
-            // Apply offset and rotation to preview
-            previewObject.transform.position = gridPos + Vector3.up * 0.05f;
+            // --- NEW: Free placement mode for Decor/Default while holding Shift ---
+            bool freePlacement = (Input.GetKey(KeyCode.LeftShift) &&
+                                  (cat == BuildCategory.Decor || cat == BuildCategory.Default));
+
+            if (!freePlacement)
+            {
+                pos = grid.GetNearestPointOnGrid(pos);
+                pos.x = Mathf.Round(pos.x / grid.gridSize) * grid.gridSize;
+                pos.z = Mathf.Round(pos.z / grid.gridSize) * grid.gridSize;
+            }
+
+            previewObject.transform.position = pos + Vector3.up * 0.05f;
             previewObject.transform.rotation = rotation;
         }
     }
@@ -128,9 +134,14 @@ public class BuildingManager : MonoBehaviour
         {
             var cat = buildPrefabs[selectedIndex].category;
             Vector3 pos = previewObject.transform.position;
-            Quaternion rot = rotation; // Always match preview rotation
+            Quaternion rot = rotation;
 
-            pos = grid.GetNearestPointOnGrid(pos);
+            bool freePlacement = (Input.GetKey(KeyCode.LeftShift) &&
+                                  (cat == BuildCategory.Decor || cat == BuildCategory.Default));
+
+            if (!freePlacement)
+                pos = grid.GetNearestPointOnGrid(pos);
+
             pos.y = currentHeight;
 
             GameObject piece = Instantiate(buildPrefabs[selectedIndex].prefab, pos, rot);
@@ -294,6 +305,7 @@ public class BuildingManager : MonoBehaviour
         Vector3 gridPos = grid.GetNearestPointOnGrid(hit.point);
         gridPos.y = currentHeight;
 
+        // Start Drag
         if (Input.GetMouseButtonDown(0))
         {
             isDragging = true;
@@ -301,12 +313,20 @@ public class BuildingManager : MonoBehaviour
             dragEndPos = gridPos;
         }
 
+        // While Dragging
         if (isDragging && Input.GetMouseButton(0))
         {
-            dragEndPos = gridPos;
+            Vector3 localDir = (gridPos - dragStartPos);
+
+            // Constrain to preview’s forward (local Z) axis
+            Vector3 forward = rotation * Vector3.forward;  // local Z of current rotation
+            float projection = Vector3.Dot(localDir, forward.normalized);
+            dragEndPos = dragStartPos + forward.normalized * projection;
+
             UpdateDragPreview(dragStartPos, dragEndPos);
         }
 
+        // End Drag
         if (isDragging && Input.GetMouseButtonUp(0))
         {
             isDragging = false;
