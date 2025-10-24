@@ -44,7 +44,7 @@ public class FlowManager : MonoBehaviour
         else
         {
             // terminal/boarded stage - can be expanded for game feel
-            npc.SetState(NPCState.DoneAll);
+            npc.FlagDoneAll();
         }
     }
 
